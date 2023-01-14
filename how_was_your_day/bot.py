@@ -82,7 +82,7 @@ def echo_all(message):
     user_input = message.text
     user_info = get_user_info(message)
     logging.info(f"User with nickname {user_info['user_username']} query input: {user_input}.")
-    base_prompt = f"{user_info['user_name']} comes and says to you: {user_input} \n You want to say something nice to {user_info['user_name']}, support him. Want to make he or she happy and reply with:"
+    base_prompt = f"{user_info['user_name']} comes and says to you: {user_input} \n You want to say something nice to {user_info['user_name']}, support him or her. Want to make he or she happy and reply with:"
     response = openai.Completion.create(model="text-davinci-003", prompt=base_prompt, temperature=0.5, max_tokens=max_tokens)
     logging.info(f"Bot response: {response.choices[0].text}")
     bot.reply_to(message, response.choices[0].text)
