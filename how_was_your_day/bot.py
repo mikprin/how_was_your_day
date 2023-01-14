@@ -30,6 +30,12 @@ except Exception as e:
 
 # OpenAI API:
 openai.api_key = os.getenv("OPENAI_API_KEY")
+try:
+    max_tokens = int(os.getenv("MAX_TOKENS"))
+except Exception as e:
+    logging.error("Error loading max tokens: ", e)
+    sys.exit(1)
+logging.info(f"OpenAI API key loaded. Max tokens: {max_tokens}")
 
 # Telegram bot
 telegram_token = os.getenv("TELEGRAM_API_KEY")
@@ -67,7 +73,7 @@ def send_query(message):
     prompt = message.text
     user_info = get_user_info(message)
     logging.info(f"User with nickname {user_info['user_username']} query input: {prompt} with command: query")
-    response = openai.Completion.create(model="text-davinci-003", prompt=prompt, temperature=0.5, max_tokens=100)
+    response = openai.Completion.create(model="text-davinci-003", prompt=prompt, temperature=0.5, max_tokens=max_tokens)
     logging.info(f"Bot response: {response.choices[0].text}")
     bot.reply_to(message, response.choices[0].text)
 
@@ -77,7 +83,7 @@ def echo_all(message):
     user_info = get_user_info(message)
     logging.info(f"User with nickname {user_info['user_username']} query input: {user_input}.")
     base_prompt = f"Person with name {user_info['user_name']} comes and says: {user_input} \n You want to say something nice to user, support him. Want to make he or she happy and reply with:"
-    response = openai.Completion.create(model="text-davinci-003", prompt=base_prompt, temperature=0.5, max_tokens=100)
+    response = openai.Completion.create(model="text-davinci-003", prompt=base_prompt, temperature=0.5, max_tokens=max_tokens)
     logging.info(f"Bot response: {response.choices[0].text}")
     bot.reply_to(message, response.choices[0].text)
     
