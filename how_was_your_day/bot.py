@@ -52,17 +52,21 @@ def get_user_info(message):
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-	bot.reply_to(message, msgs.welcome_msg)
+    user_info = get_user_info(message)
+    logging.info(f"User with nickname {user_info['user_username']} started the bot.")
+    bot.reply_to(message, msgs.welcome_msg)
 
 @bot.message_handler(commands=['creator'])
 def send_creator_info(message):
+    user_info = get_user_info(message)
+    logging.info(f"User with nickname {user_info['user_username']} requested info about creator.")
     bot.reply_to(message, msgs.creator_info)
 
 @bot.message_handler(commands=['query'])
 def send_query(message):
     prompt = message.text
     user_info = get_user_info(message)
-    logging.info(f"User query input: {prompt} with command: query")
+    logging.info(f"User with nickname {user_info['user_username']} query input: {prompt} with command: query")
     response = openai.Completion.create(model="text-davinci-003", prompt=prompt, temperature=0.5, max_tokens=100)
     logging.info(f"Bot response: {response.choices[0].text}")
     bot.reply_to(message, response.choices[0].text)
@@ -71,7 +75,7 @@ def send_query(message):
 def echo_all(message):
     user_input = message.text
     user_info = get_user_info(message)
-    logging.info(f"User query input: {user_input}.")
+    logging.info(f"User with nickname {user_info['user_username']} query input: {user_input}.")
     base_prompt = f"Person with name {user_info['user_name']} comes and says: {user_input} \n You want to say something nice to user, support him. Want to make he or she happy and reply with:"
     response = openai.Completion.create(model="text-davinci-003", prompt=base_prompt, temperature=0.5, max_tokens=100)
     logging.info(f"Bot response: {response.choices[0].text}")
