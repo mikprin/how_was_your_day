@@ -48,14 +48,18 @@ def send_creator_info(message):
 @bot.message_handler(commands=['query'])
 def send_query(message):
     prompt = message.text
+    logging.info(f"User query input: {prompt} with command: query")
     response = openai.Completion.create(model="text-davinci-003", prompt=prompt, temperature=0.5, max_tokens=100)
+    logging.info(f"Bot response: {response.choices[0].text}")
     bot.reply_to(message, response.choices[0].text)
 
 @bot.message_handler(func=lambda message: True)
 def echo_all(message):
     user_input = message.text
+    logging.info(f"User query input: {user_input}.")
     base_prompt = f"User comes and says: {user_input} \n You want to say something nice to user, support him. Want to make he or she happy and reply with:"
     response = openai.Completion.create(model="text-davinci-003", prompt=base_prompt, temperature=0.5, max_tokens=100)
+    logging.info(f"Bot response: {response.choices[0].text}")
     bot.reply_to(message, response.choices[0].text)
     
 bot.infinity_polling()
