@@ -12,10 +12,10 @@ RUN apt-get update && apt-get install -y \
     software-properties-common \
     && rm -rf /var/lib/apt/lists/* &&\
     apt-get clean
+# Copy the requirements.txt file to the container before copying the rest of the code
+COPY requirements.txt /app
 
 COPY how_was_your_day /app
-
-COPY requirements.txt /app
 
 COPY .env /
 
