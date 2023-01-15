@@ -4,3 +4,7 @@ services:
     container_name: how_was_your_day_bot_app
     restart: always
     build: .
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
