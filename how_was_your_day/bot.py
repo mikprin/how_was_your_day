@@ -40,7 +40,11 @@ logging.info(f"OpenAI API key loaded. Max tokens: {max_tokens}")
 # Telegram bot
 telegram_token = os.getenv("TELEGRAM_API_KEY")
 
+logger = telebot.logger
+telebot.logger.setLevel(logging.WARNING) # Outputs debug messages to console.
+
 bot = telebot.TeleBot(telegram_token, parse_mode=None) # You can set parse_mode by default. HTML or MARKDOWN
+
 
 
 def get_user_info(message):

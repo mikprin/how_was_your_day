@@ -8,3 +8,27 @@ services:
       driver: json-file
       options:
         max-size: 20m
+    depends_on:
+      - redis_help_bot
+    networks:
+      - help_bot_network
+  
+  redis_help_bot:
+    container_name: redis_help_bot
+    image: redis
+    restart: always
+    # Persistent storage
+    volumes:
+      - ./redis_data:/data
+      - ./redis_config/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf --save 60 1 #--loglevel warning
+    ports:
+      - "${REDIS_PORT}:16379"
+    environment:
+    - REDIS_MAXMEMORY=1024mb # Limit Redis memory usage to 1024mb
+    networks:
+      - help_bot_network
+
+networks:
+  help_bot_network:
+    driver: bridge
