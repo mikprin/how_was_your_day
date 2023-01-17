@@ -1,4 +1,11 @@
 
+# Idea and realization
+
+Telegram bot that asks you how was your day and sends results to GPT-3 API. GPT-3 generates an answer and sends it back to you.
+
+Now bot supports memory of the last 24 hours. It means that you can ask bot how was your day yesterday and it will remember it.
+
+Under the hood it uses GPT-3 API and Telegram API. And redis for storing user data.
 # Deployment
 Simplest deployment is to use docker-compose. Just run `docker-compose up -d` and you are ready to go.
 

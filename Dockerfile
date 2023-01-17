@@ -15,10 +15,12 @@ RUN apt-get update && apt-get install -y \
 # Copy the requirements.txt file to the container before copying the rest of the code
 COPY requirements.txt /app
 
+RUN pip3 install -r requirements.txt
+
 COPY how_was_your_day /app
 
 COPY .env /
 
-RUN pip3 install -r requirements.txt
+
 
 CMD ["python3", "bot.py"]

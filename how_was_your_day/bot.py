@@ -1,16 +1,17 @@
 # File with code for the telegram bot
-
+CLEANUP_INTERVAL = 60*60
 
 # Importing libraries
-import logging, dotenv, os, sys
+import logging, dotenv, os, sys, threading, time
+import redis
 import telebot
 import openai
 
 # Local imports
 import msgs
+import redis_tools
 
 # Logging
-
 import logging.handlers
 logger = logging.getLogger()
 logger.addHandler(logging.StreamHandler())
@@ -26,6 +27,30 @@ try:
     logging.info("Loaded .env file")
 except Exception as e:
     logging.error("Error loading .env file: ", e)
+    sys.exit(1)
+
+# Redis database
+
+redis_hosts = os.getenv("REDIS_HOSTS").split(",")
+redis_port = os.getenv("REDIS_PORT")
+
+
+connected_to_redis = False
+for host in redis_hosts:
+    connection = redis.Redis(
+    host=host,
+    port=redis_port,
+    )
+    try:
+        if connection.ping():
+            logging.info(f"Connected to redis host {host}")
+            connected_to_redis = True
+            redis_connection = connection
+            break
+    except Exception as e:
+        logging.error(f"Could not connect to redis host {host}: {e}")
+if not connected_to_redis:
+    logging.error("Could not connect to redis")
     sys.exit(1)
 
 # OpenAI API:
@@ -60,9 +85,23 @@ def get_user_info(message):
     }
     return user_info
 
+
+# Create thread to clean redis database
+def clean_redis():
+    while True:
+        redis_tools.clean_redis_database(redis_connection)
+        time.sleep(CLEANUP_INTERVAL)
+
+cleanup_thread = threading.Thread(target=clean_redis)
+cleanup_thread.start()
+logging.info(f"Cleanup thread started with interval {CLEANUP_INTERVAL} seconds")
+
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     user_info = get_user_info(message)
+    database_user_key = f"user_{user_info['user_id']}"
+    if not redis_tools.check_if_user_exists(redis_connection, database_user_key, redis_tools.ALL_USERS):
+        redis_tools.add_user_to_redis(redis_connection, database_user_key)
     logging.info(f"User with nickname {user_info['user_username']} started the bot.")
     bot.reply_to(message, msgs.welcome_msg)
 
@@ -85,6 +124,8 @@ def send_query(message):
 def echo_all(message):
     user_input = message.text
     user_info = get_user_info(message)
+    if not redis_tools.check_if_user_exists(redis_connection, user_info['user_username'] , redis_tools.ALL_USERS):
+        redis_tools.add_user_to_redis(redis_connection, user_info['user_username'])
     logging.info(f"User with nickname {user_info['user_username']} query input: {user_input}.")
     base_prompt = f"{user_info['user_name']} comes and says to you: {user_input}. You want to say something nice to {user_info['user_name']}, support him or her. Want to make he or she happy and reply with:"
     response = openai.Completion.create(model="text-davinci-003", prompt=base_prompt, temperature=0.5, max_tokens=max_tokens)
