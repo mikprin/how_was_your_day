@@ -1,10 +1,10 @@
-import time
+import time,logging
 
 # Defines
 ALL_USERS = "_telegram_users_"
 ACTIVE_USERS = "_active_users_"
 GLOBAL_DATABASE_LOCK = "_global_database_lock_"
-INTERACTION_TIMEOUT = 86400
+INTERACTION_TIMEOUT = 172800
 
 # Functions
 def add_user_to_redis(redis_connection, user):
@@ -14,7 +14,7 @@ def add_user_to_redis(redis_connection, user):
 
 def check_if_user_exists(redis_connection, user, collection):
     """Check if user exists in redis"""
-    lst = redis_connection.lrange(collection, 0, -1)
+    lst = [ x.decode("utf-8") for x in redis_connection.lrange(ACTIVE_USERS, 0, -1)]
     if user in lst:
         return True
     return False
@@ -27,9 +27,16 @@ def set_last_interaction(redis_connection, user, timestamp):
 def delete_outdated_interaction(redis_connection, user, timestamp):
     """Delete outdated interaction"""
     with redis_connection.lock(GLOBAL_DATABASE_LOCK, blocking=True , timeout=10) as lock:
+        try:
+            int(redis_connection.get(f"{user}_last_interaction"))
+            logging.warning(f"Last interaction for {user} not found. Deleting user.") 
+        except:
+            redis_connection.lrem(ACTIVE_USERS, 0, user)
+            return 0
         if timestamp - int(redis_connection.get(f"{user}_last_interaction")) > INTERACTION_TIMEOUT:
             redis_connection.delete(f"{user}_last_interaction")
             redis_connection.delete(f"{user}_conversation")
+            redis_connection.lrem(ACTIVE_USERS, 0, user)
 
 def delete_interactions(redis_connection, user):
     """Delete interactions for user"""
@@ -43,10 +50,9 @@ def add_conversation(redis_connection, user, conversation):
     with redis_connection.lock(GLOBAL_DATABASE_LOCK, blocking=True , timeout=10) as lock:
         if not check_if_user_exists(redis_connection, user, ACTIVE_USERS):
             redis_connection.rpush(ACTIVE_USERS, user)
-            redis_connection.rpush(f"{user}_conversation", conversation)
-        else:
-            redis_connection.rpush(f"{user}_conversation", conversation)
-
+        redis_connection.rpush(f"{user}_conversation", conversation)
+        redis_connection.set(f"{user}_last_interaction", int(time.time()))
+        
 def read_conversation(redis_connection, user):
     """Read conversation from redis"""
     with redis_connection.lock(GLOBAL_DATABASE_LOCK, blocking=True , timeout=10) as lock:
@@ -56,5 +62,8 @@ def databse_garbage_collector(redis_connection):
     """Delete outdated interactions"""
     current_time = int(time.time())
     active_users = redis_connection.lrange(ACTIVE_USERS, 0, -1)
+    if active_users is None:
+        return 1
     for user in active_users:
         delete_outdated_interaction(redis_connection, user, current_time)
+        return 0

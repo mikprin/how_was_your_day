@@ -89,7 +89,8 @@ def get_user_info(message):
 # Create thread to clean redis database
 def clean_redis():
     while True:
-        redis_tools.clean_redis_database(redis_connection)
+        logging.info(f"Cleaning redis database. Time: {time.time()}")
+        redis_tools.databse_garbage_collector(redis_connection)
         time.sleep(CLEANUP_INTERVAL)
 
 cleanup_thread = threading.Thread(target=clean_redis)
@@ -120,16 +121,45 @@ def send_query(message):
     logging.info(f"Bot response: {response.choices[0].text}")
     bot.reply_to(message, response.choices[0].text)
 
+@bot.message_handler(commands=['delete_conversation'])
+def delete_conversation(message):
+    '''Deletes conversation from redis database'''
+    user_info = get_user_info(message)
+    logging.info(f"User with nickname {user_info['user_username']} requested to delete conversation.")
+    redis_tools.delete_interactions(redis_connection, user_info['user_username'])
+    bot.reply_to(message, "Conversation deleted 😎")
+
 @bot.message_handler(func=lambda message: True)
-def echo_all(message):
+def gpt_response(message):
+    '''Main function that handles user input and sends response from GPT-3'''
     user_input = message.text
     user_info = get_user_info(message)
+    logging.info(f"User with nickname {user_info['user_username']} query input: {user_input}.")
+    
+    # Adding user to redis database if not exists
     if not redis_tools.check_if_user_exists(redis_connection, user_info['user_username'] , redis_tools.ALL_USERS):
         redis_tools.add_user_to_redis(redis_connection, user_info['user_username'])
-    logging.info(f"User with nickname {user_info['user_username']} query input: {user_input}.")
-    base_prompt = f"{user_info['user_name']} comes and says to you: {user_input}. You want to say something nice to {user_info['user_name']}, support him or her. Want to make he or she happy and reply with:"
+    
+    # Understaning if user is active or not
+    if redis_tools.check_if_user_exists(redis_connection, user_info['user_username'], redis_tools.ACTIVE_USERS):
+        conversation = redis_tools.read_conversation(redis_connection, user_info['user_username'])
+        # Concatenating user input with previous conversation
+        all_conversation = f""
+        for line in conversation:
+            all_conversation += line.decode("utf-8")
+        # starting conversation
+        base_prompt = f"You have a following conversation with {user_info['user_name']}:\n{all_conversation}\nYou want to say something nice to {user_info['user_name']}, support him or her. Want to make he or she happy so reply with:"
+    else: 
+        user_said = f"{user_info['user_name']}: {user_input}\n"
+        redis_tools.add_conversation(redis_connection, user_info['user_username'], user_said)
+        base_prompt = f"{user_info['user_name']} comes and says to you: {user_input}. You want to say something nice to {user_info['user_name']}, support him or her. Want to make he or she happy and reply with:"
+    
+    # Generating response
     response = openai.Completion.create(model="text-davinci-003", prompt=base_prompt, temperature=0.5, max_tokens=max_tokens)
+    you_said = f"You: {response.choices[0].text}\n"
+    redis_tools.add_conversation(redis_connection, user_info['user_username'], you_said)
     logging.info(f"Bot response: {response.choices[0].text}")
     bot.reply_to(message, response.choices[0].text)
+
     
 bot.infinity_polling()
