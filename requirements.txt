@@ -1,4 +1,4 @@
-openai
-python-dotenv
-pyTelegramBotAPI
+openai # openai api
+python-dotenv # python dotenv
+aiogram # telegram bot
 redis

@@ -4,7 +4,7 @@ CLEANUP_INTERVAL = 60*60
 # Importing libraries
 import logging, dotenv, os, sys, threading, time
 import redis
-import telebot
+from aiogram import Bot, Dispatcher, executor, types
 import openai
 
 # Local imports
@@ -65,11 +65,10 @@ logging.info(f"OpenAI API key loaded. Max tokens: {max_tokens}")
 # Telegram bot
 telegram_token = os.getenv("TELEGRAM_API_KEY")
 
-logger = telebot.logger
-telebot.logger.setLevel(logging.WARNING) # Outputs debug messages to console.
+logging.basicConfig(level=logging.WARNING)
 
-bot = telebot.TeleBot(telegram_token, parse_mode=None) # You can set parse_mode by default. HTML or MARKDOWN
-
+bot = Bot(token=telegram_token)
+dp = Dispatcher(bot)
 
 
 def get_user_info(message):
@@ -97,40 +96,40 @@ cleanup_thread = threading.Thread(target=clean_redis)
 cleanup_thread.start()
 logging.info(f"Cleanup thread started with interval {CLEANUP_INTERVAL} seconds")
 
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
+@dp.message_handler(commands=['start', 'help'])
+async def send_welcome(message):
     user_info = get_user_info(message)
-    database_user_key = f"user_{user_info['user_id']}"
+    database_user_key = user_info['user_username']
     if not redis_tools.check_if_user_exists(redis_connection, database_user_key, redis_tools.ALL_USERS):
         redis_tools.add_user_to_redis(redis_connection, database_user_key)
     logging.info(f"User with nickname {user_info['user_username']} started the bot.")
-    bot.reply_to(message, msgs.welcome_msg)
+    await message.reply(msgs.welcome_msg)
 
-@bot.message_handler(commands=['creator'])
-def send_creator_info(message):
+@dp.message_handler(commands=['creator'])
+async def send_creator_info(message):
     user_info = get_user_info(message)
     logging.info(f"User with nickname {user_info['user_username']} requested info about creator.")
-    bot.reply_to(message, msgs.creator_info)
+    await message.reply(msgs.creator_info)
 
-@bot.message_handler(commands=['query'])
-def send_query(message):
-    prompt = message.text.replace("/query", "")
+@dp.message_handler(commands=['query'])
+async def send_query(message):
+    prompt = message.text.removeprefix("/query").strip()
     user_info = get_user_info(message)
     logging.info(f"User with nickname {user_info['user_username']} query input: {prompt} with command: query")
     response = openai.Completion.create(model="text-davinci-003", prompt=prompt, temperature=0.5, max_tokens=max_tokens)
     logging.info(f"Bot response: {response.choices[0].text}")
-    bot.reply_to(message, response.choices[0].text)
+    await message.reply(response.choices[0].text)
 
-@bot.message_handler(commands=['delete_conversation'])
-def delete_conversation(message):
+@dp.message_handler(commands=['delete_conversation'])
+async def delete_conversation(message):
     '''Deletes conversation from redis database'''
     user_info = get_user_info(message)
     logging.info(f"User with nickname {user_info['user_username']} requested to delete conversation.")
     redis_tools.delete_interactions(redis_connection, user_info['user_username'])
-    bot.reply_to(message, "Conversation deleted 😎")
+    await message.reply("Conversation deleted 😎")
 
-@bot.message_handler(func=lambda message: True)
-def gpt_response(message):
+@dp.message_handler()
+async def gpt_response(message):
     '''Main function that handles user input and sends response from GPT-3'''
     user_input = message.text
     user_info = get_user_info(message)
@@ -139,6 +138,7 @@ def gpt_response(message):
     # Adding user to redis database if not exists
     if not redis_tools.check_if_user_exists(redis_connection, user_info['user_username'] , redis_tools.ALL_USERS):
         redis_tools.add_user_to_redis(redis_connection, user_info['user_username'])
+        
     
     # Understaning if user is active or not
     if redis_tools.check_if_user_exists(redis_connection, user_info['user_username'], redis_tools.ACTIVE_USERS):
@@ -159,7 +159,8 @@ def gpt_response(message):
     you_said = f"You: {response.choices[0].text}\n"
     redis_tools.add_conversation(redis_connection, user_info['user_username'], you_said)
     logging.info(f"Bot response: {response.choices[0].text}")
-    bot.reply_to(message, response.choices[0].text)
+    await message.reply(response.choices[0].text)
 
     
-bot.infinity_polling()
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)

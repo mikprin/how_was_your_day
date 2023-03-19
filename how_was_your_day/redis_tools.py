@@ -6,11 +6,19 @@ ACTIVE_USERS = "_active_users_"
 GLOBAL_DATABASE_LOCK = "_global_database_lock_"
 INTERACTION_TIMEOUT = 172800
 
+USER_PREFIX = "user_"
+CHAT_ID_SUFFIX = "_chat_id"
+
 # Functions
 def add_user_to_redis(redis_connection, user):
     """Add user to redis"""
     with redis_connection.lock(GLOBAL_DATABASE_LOCK, blocking=True , timeout=10) as lock:
         redis_connection.rpush(ALL_USERS, user)
+
+def add_user_chat_id_to_redis(redis_connection, user, chat_id):
+    """Add user chat id to redis"""
+    with redis_connection.lock(GLOBAL_DATABASE_LOCK, blocking=True , timeout=10) as lock:
+        redis_connection.set(f"{user}{CHAT_ID_SUFFIX}", chat_id)
 
 def check_if_user_exists(redis_connection, user, collection):
     """Check if user exists in redis"""
