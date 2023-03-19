@@ -10,6 +10,7 @@ import openai
 # Local imports
 import msgs
 import redis_tools
+import str_formatter
 
 # Logging
 import logging.handlers
@@ -120,6 +121,20 @@ async def send_query(message):
     logging.info(f"Bot response: {response.choices[0].text}")
     await message.reply(response.choices[0].text)
 
+@dp.message_handler(commands=['conversation'])
+async def get_conversation(message):
+    # prompt = message.text.removeprefix("/conversation").strip()
+    user_info = get_user_info(message)
+    logging.info(f"User with nickname {user_info['user_username']} input: with command: conversation")
+    response = redis_tools.read_conversation(redis_connection, user_info['user_username'])
+    if response:
+        response = str_formatter.format_conversation_from_list(response)
+        logging.info(f"Conversation: {response}")
+        if response:
+            await message.reply(response)
+        else:
+            await message.reply("No conversation found.")
+
 @dp.message_handler(commands=['delete_conversation'])
 async def delete_conversation(message):
     '''Deletes conversation from redis database'''
@@ -134,29 +149,32 @@ async def gpt_response(message):
     user_input = message.text
     user_info = get_user_info(message)
     logging.info(f"User with nickname {user_info['user_username']} query input: {user_input}.")
-    
+    user_said = f"{user_info['user_name']}: {user_input}"
     # Adding user to redis database if not exists
     if not redis_tools.check_if_user_exists(redis_connection, user_info['user_username'] , redis_tools.ALL_USERS):
         redis_tools.add_user_to_redis(redis_connection, user_info['user_username'])
-        
+    
+    redis_tools.add_conversation(redis_connection, user_info['user_username'], user_said)
     
     # Understaning if user is active or not
     if redis_tools.check_if_user_exists(redis_connection, user_info['user_username'], redis_tools.ACTIVE_USERS):
         conversation = redis_tools.read_conversation(redis_connection, user_info['user_username'])
         # Concatenating user input with previous conversation
-        all_conversation = f""
-        for line in conversation:
-            all_conversation += line.decode("utf-8")
+        all_conversation = redis_tools.read_conversation(redis_connection, user_info['user_username'])
+        if all_conversation:
+            all_conversation = str_formatter.format_conversation_from_list(all_conversation)
+        all_conversation += f"\n{user_said}"
+        # for line in conversation:
+        #     all_conversation += line.decode("utf-8")
         # starting conversation
-        base_prompt = f"You have a following conversation with {user_info['user_name']}:\n{all_conversation}\nYou want to say something nice to {user_info['user_name']}, support him or her. Want to make he or she happy so reply with:"
-    else: 
-        user_said = f"{user_info['user_name']}: {user_input}\n"
+        base_prompt = f"You have a following conversation with {user_info['user_name']}:\n{all_conversation}\nYou want to say something nice to {user_info['user_name']}, support him or her. So reply with:"
+    else:
         redis_tools.add_conversation(redis_connection, user_info['user_username'], user_said)
         base_prompt = f"{user_info['user_name']} comes and says to you: {user_input}. You want to say something nice to {user_info['user_name']}, support him or her. Want to make he or she happy and reply with:"
     
     # Generating response
     response = openai.Completion.create(model="text-davinci-003", prompt=base_prompt, temperature=0.5, max_tokens=max_tokens)
-    you_said = f"You: {response.choices[0].text}\n"
+    you_said = f"You: {response.choices[0].text} "
     redis_tools.add_conversation(redis_connection, user_info['user_username'], you_said)
     logging.info(f"Bot response: {response.choices[0].text}")
     await message.reply(response.choices[0].text)

@@ -2,3 +2,4 @@
 .env
 logs
 redis_data
+dev.ipynb

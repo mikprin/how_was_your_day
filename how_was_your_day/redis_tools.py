@@ -64,7 +64,9 @@ def add_conversation(redis_connection, user, conversation):
 def read_conversation(redis_connection, user):
     """Read conversation from redis"""
     with redis_connection.lock(GLOBAL_DATABASE_LOCK, blocking=True , timeout=10) as lock:
-        return redis_connection.lrange(f"{user}_conversation", 0, -1)
+        raw_conversation = redis_connection.lrange(f"{user}_conversation", 0, -1)
+        conversation = [s.decode("utf-8") for s in raw_conversation ]
+        return conversation
 
 def databse_garbage_collector(redis_connection):
     """Delete outdated interactions"""
